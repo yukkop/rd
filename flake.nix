@@ -24,6 +24,9 @@
           glibc
           ffmpeg
           ffmpeg.lib
+	  pkg-config
+	  SDL2
+	  SDL2.dev
           stdenv.cc.cc.lib
           libclang
 	  alsa-lib

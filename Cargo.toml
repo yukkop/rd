@@ -6,5 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ffmpeg-next = "7.0.2"
+ffmpeg-next = { git = "https://github.com/zmwangx/rust-ffmpeg.git", rev = "0e4c39a5a034b4fe9e34fdf4f85f1cd93b8756ab" }
 rodio = "0.19.0"
+sdl2 = "0.37.0"

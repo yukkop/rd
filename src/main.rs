@@ -1,37 +1,70 @@
-extern crate ffmpeg_next as ffmpeg;
-extern crate rodio;
+use ffmpeg_next as ffmpeg;
+use sdl2::pixels::PixelFormatEnum;
+use std::env;
 
-use ffmpeg::{format, media};
-use ffmpeg::media::Type;
-use std::slice::SliceIndex;
-use rodio::Source;
-use std::error::Error;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize FFmpeg
+    ffmpeg::init()?;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    // Open video file
-    let mut ictx = *format::input(&"your_video.mp4")?;
-    let mut decoder = ictx.streams().best(media::Type::Video).unwrap().codec().decoder().unwrap();
+    // Get the video file from command line argument
+    let input_path = env::args().nth(1).expect("Please provide a path to a video file.");
 
-    // Audio playback example (using rodio)
-    let (_stream, stream_handle) = rodio::OutputStream::try_default()?;
-    let sink = stream_handle.play_raw();
+    // Open the input file
+    let mut ictx = ffmpeg::format::input(&input_path)?;
 
-    // Example audio (replace with your own audio loading logic)
-    let source = rodio::source::SineWave::new(440.0);
-    sink.append(source);
+    // Find the best video stream
+    let input = ictx.streams().best(ffmpeg::media::Type::Video).ok_or(ffmpeg::Error::StreamNotFound)?;
+    let video_stream_index = input.index();
+    let mut context_decoder =
+            ffmpeg_next::codec::context::Context::from_parameters(input.parameters())?;
+    let mut decoder = context_decoder.decoder().video()?;
 
-    // Display video frames (example)
-    let mut packet = ffmpeg::Packet::empty();
-    while ictx.read_packet(&mut packet)? {
-        if packet.stream().index() == decoder.index() {
-            let mut frame = ffmpeg::Frame::empty();
-            decoder.decode(&packet, &mut frame)?;
+    // Set up SDL2
+    let sdl_context = sdl2::init()?;
+    let video_subsystem = sdl_context.video()?;
+    let window = video_subsystem.window("Rust Video Player", decoder.width(), decoder.height())
+        .position_centered()
+        .opengl()
+        .build()
+        .map_err(|e| e.to_string())?;
+    let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
+    let texture_creator = canvas.texture_creator();
+    let mut texture = texture_creator.create_texture_streaming(
+        PixelFormatEnum::IYUV,
+        decoder.width(),
+        decoder.height(),
+    )?;
 
-            // Display or process video frame here (e.g., with OpenGL or image crate)
-
-            // Example: Print frame information
-            println!("Frame number: {}", decoder.frames_decoded());
+    // Read frames and display them
+    let mut frame = ffmpeg::frame::Video::empty();
+    for (stream, packet) in ictx.packets() {
+        if stream.index() == video_stream_index {
+            decoder.send_packet(&packet)?;
+            while decoder.receive_frame(&mut frame).is_ok() {
+                texture.update_yuv(
+                    None,
+                    frame.data(0), frame.stride(0) as usize,
+                    frame.data(1), frame.stride(1) as usize,
+                    frame.data(2), frame.stride(2) as usize,
+                )?;
+                canvas.clear();
+                canvas.copy(&texture, None, None)?;
+                canvas.present();
+            }
         }
+    }
+
+    decoder.send_eof()?;
+    while decoder.receive_frame(&mut frame).is_ok() {
+        texture.update_yuv(
+            None,
+            frame.data(0), frame.stride(0) as usize,
+            frame.data(1), frame.stride(1) as usize,
+            frame.data(2), frame.stride(2) as usize,
+        )?;
+        canvas.clear();
+        canvas.copy(&texture, None, None)?;
+        canvas.present();
     }
 
     Ok(())
