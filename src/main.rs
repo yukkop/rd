@@ -1,8 +1,10 @@
 use ffmpeg_next as ffmpeg;
-use sdl2::pixels::PixelFormatEnum;
-use std::env;
+use sdl2::{event::Event, keyboard::Keycode, pixels::PixelFormatEnum, render::{Canvas, Texture}, EventPump};
+use std::{env, error::Error};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
+
     // Initialize FFmpeg
     ffmpeg::init()?;
 
@@ -35,27 +37,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         decoder.height(),
     )?;
 
+    // Set up event handling
+    let mut event_pump = sdl_context.event_pump()?;
+    let mut running = true;
+
     // Read frames and display them
     let mut frame = ffmpeg::frame::Video::empty();
     for (stream, packet) in ictx.packets() {
         if stream.index() == video_stream_index {
             decoder.send_packet(&packet)?;
-            while decoder.receive_frame(&mut frame).is_ok() {
-                texture.update_yuv(
-                    None,
-                    frame.data(0), frame.stride(0) as usize,
-                    frame.data(1), frame.stride(1) as usize,
-                    frame.data(2), frame.stride(2) as usize,
-                )?;
-                canvas.clear();
-                canvas.copy(&texture, None, None)?;
-                canvas.present();
-            }
+            let _ = action(&mut frame, &mut decoder, &mut event_pump, &mut running, &mut texture, &mut canvas);
         }
     }
 
     decoder.send_eof()?;
-    while decoder.receive_frame(&mut frame).is_ok() {
+    let _ = action(&mut frame, &mut decoder, &mut event_pump, &mut running, &mut texture, &mut canvas);
+
+    Ok(())
+}
+
+fn action(
+    frame: &mut ffmpeg::frame::Video,
+    decoder: &mut  ffmpeg::decoder::Video,
+    event_pump: &mut  EventPump,
+    running: &mut bool,
+    texture: &mut Texture,
+    canvas: &mut  Canvas<sdl2::video::Window>
+) -> Result<(), Box<dyn Error>> {
+    while decoder.receive_frame(frame).is_ok() {
+        for event in event_pump.poll_iter() {
+            log::info!("event: {:#?}", event);
+            match event {
+                Event::Quit {..} |
+                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                    *running = false;
+                    break;
+                },
+                _ => {}
+            }
+        }
+
+        if !*running {
+            break;
+        }
+
         texture.update_yuv(
             None,
             frame.data(0), frame.stride(0) as usize,
