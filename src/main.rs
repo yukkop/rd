@@ -66,6 +66,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &frame_delay,
             );
         }
+
+        if !running {
+            break;
+        }
     }
 
     decoder.send_eof()?;
