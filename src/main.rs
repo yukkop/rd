@@ -5,6 +5,8 @@ use std::{env, error::Error, time::{Duration, Instant}};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
+    let a: libc::c_void;
+
     // Initialize FFmpeg
     ffmpeg::init()?;
 
@@ -17,12 +19,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Find the best video stream
     let input = ictx.streams().best(ffmpeg::media::Type::Video).ok_or(ffmpeg::Error::StreamNotFound)?;
     let video_stream_index = input.index();
-    let mut context_decoder =
+    let context_decoder =
             ffmpeg_next::codec::context::Context::from_parameters(input.parameters())?;
     let mut decoder = context_decoder.decoder().video()?;
 
     // Calculate the frame delay
-    let time_base = input.time_base();
+    //let time_base = input.time_base();
     let frame_rate: f64 = input.avg_frame_rate().into();
     log::debug!("frame rate: {:#?}", frame_rate);
     let frame_delay = Duration::from_secs_f64(1. / frame_rate);

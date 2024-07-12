@@ -30,6 +30,10 @@
           stdenv.cc.cc.lib
           libclang
 	  alsa-lib
+
+          # cargo utility
+	  wasm-pack
+	  trunk
         ];
       in
       with pkgs; {
